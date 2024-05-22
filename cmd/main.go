@@ -5,6 +5,8 @@ import (
   "io"
   "net/http"
 
+  Highlow "highlow/cmd/highlow"
+
   "github.com/labstack/echo/v4"
   "github.com/labstack/echo/v4/middleware"
   "github.com/google/uuid"
@@ -189,7 +191,6 @@ func main() {
     game := Game {
       DisplayName: displayName,
       ActiveCard: c.QueryParam("ActiveCard"),
-      NextCard: c.QueryParam("NextCard"),
       State: "in_progress",
       Dirty: true,
     }

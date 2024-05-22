@@ -33,7 +33,7 @@
 {{ end }}
 
 {{ block "game" . }}
-<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 2s" hx-swap="outerHTML" class="game-container">
+<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 1s" hx-swap="outerHTML" class="game-container">
   <div class="{{ .GameClass }}">
     <div class="display-name center">{{ .DisplayName }}</div>
     <div class="active-card center">{{ .ActiveCard }}</div>
@@ -50,14 +50,14 @@
 {{ end }}
 
 {{ block "result" . }}
-<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 5s" hx-swap="outerHTML" class="game-container">
+<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 3s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div id="result-text" class="center">{{ .Text }}</div>
 </div>
 {{ end }}
 
 {{ block "endGame" . }}
-<div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" hx-trigger="every 10s" hx-swap="outerHTML" class="game-container">
+<div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" hx-trigger="every 8s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div id="result-text" class="center">{{ .Text }}</div>
 </div>
