@@ -30,6 +30,11 @@ button {
   margin: 10px 2px;
 }
 
+#result-text {
+  font-size: 30px;
+  margin: 30px 0px;
+}
+
 *{
   margin:0;
   padding:0;
@@ -68,6 +73,10 @@ html{
   .active-card {
     font-size: 40px;
     padding: 10px 0px;
+  }
+
+  .choice-higher, .choice-lower {
+    background: lightgreen;
   }
 }
 

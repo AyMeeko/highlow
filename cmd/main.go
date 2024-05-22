@@ -33,8 +33,11 @@ type GameSession struct {
 type Game struct {
   DisplayName string
   ActiveCard string
-  UserChoice string
+  NextCard string
+  UserChoiceLower string
+  UserChoiceHigher string
   PlaceholderClass string
+  Verdict bool
   State string
   Dirty bool
 }
@@ -83,7 +86,7 @@ func isUUID(u string) bool {
 
 func main() {
   gameSession := GameSession{
-    Games: initializeGames(4),
+    Games: initializeGames(1),
   }
 
   e := echo.New()
@@ -118,18 +121,40 @@ func main() {
         gameSession.Games[game.DisplayName] = game
       }
       return c.Render(200, "game", game)
+    case "displaying_choice":
+      game.State = "displaying_result"
+      game.Dirty = false
+      gameSession.Games[game.DisplayName] = game
+      return c.Render(200, "game", game)
+    case "displaying_result":
+      game.UserChoiceLower = ""
+      game.UserChoiceHigher = ""
+      result := Result {
+        DisplayName: displayName,
+      }
+      if game.Verdict {
+        game.State = "in_progress"
+        result.Text = "Correct!"
+        game.ActiveCard = game.NextCard
+      } else {
+        game.State = "lost"
+        result.Text = "Incorrect!"
+      }
+      game.Dirty = false
+      gameSession.Games[game.DisplayName] = game
+      return c.Render(200, "result", result)
     case "won":
       result := Result {
         DisplayName: displayName,
         Text: "You win!!",
       }
-      return c.Render(200, "result", result)
+      return c.Render(200, "endGame", result)
     case "lost":
       result := Result {
         DisplayName: displayName,
-        Text: "You lost! Better luck next time",
+        Text: "You lost!",
       }
-      return c.Render(200, "result", result)
+      return c.Render(200, "endGame", result)
     default:
       return c.Render(500, "game", game)
     }
@@ -144,6 +169,7 @@ func main() {
     if !isUUID(game.DisplayName) {
       game = initializeSingleGame()
       delete(gameSession.Games, displayName)
+      game.Dirty = false
       gameSession.Games[game.DisplayName] = game
     }
     return c.Render(200, "game", game)
@@ -160,7 +186,7 @@ func main() {
     game := Game {
       DisplayName: displayName,
       ActiveCard: c.QueryParam("ActiveCard"),
-      UserChoice: c.QueryParam("UserChoice"),
+      NextCard: c.QueryParam("NextCard"),
       State: "in_progress",
       Dirty: true,
     }
@@ -173,7 +199,17 @@ func main() {
     game := gameSession.Games[displayName]
     game.DisplayName = displayName
     game.ActiveCard = c.QueryParam("ActiveCard")
-    game.UserChoice = c.QueryParam("UserChoice")
+    game.NextCard = c.QueryParam("NextCard")
+    game.State = "displaying_choice"
+    game.Verdict, _ = strconv.ParseBool(c.QueryParam("Verdict"))
+    userChoice := c.QueryParam("UserChoice")
+    if userChoice == "h" {
+      game.UserChoiceHigher = "choice-higher"
+      game.UserChoiceLower = ""
+    } else if userChoice == "l" {
+      game.UserChoiceLower = "choice-lower"
+      game.UserChoiceHigher = ""
+    }
     game.Dirty = true
     gameSession.Games[displayName] = game
     return c.String(http.StatusOK, "OK")
@@ -189,6 +225,7 @@ func main() {
     } else {
       game.State = "lost"
     }
+    game.Dirty = false
     gameSession.Games[game.DisplayName] = game
     return c.String(http.StatusOK, "OK")
   })

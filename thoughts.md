@@ -101,3 +101,11 @@ that endpoint needs to understand:
 the "game" block pings "GET /game" every 2 seconds
 the "result" block pings "initialize-placeholder" every 10 seconds
 the "initialize-placeholder" endpoint will render "game"
+
+
+- `POST new-game` => display name and active card
+=> starts the game for the user with the active card
+- `POST game` => display name, active card (same), user choice, verdict
+- needs to render the game with the choice highlighted
+- needs to render whether the choice was correct
+- needs to render the 'lost' OR new number
