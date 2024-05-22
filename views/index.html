@@ -1,0 +1,42 @@
+{{ block "index" . }}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title></title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+    <link href="css/style.css" rel="stylesheet">
+  </head>
+  <body>
+    {{ template "gameSession" . }}
+  </body>
+</html>
+{{ end }}
+
+{{ block "gameSession" . }}
+  <div class="session">
+    {{ range $Games := .Games }}
+      {{ template "game" . }}
+    {{ end }}
+  </div>
+{{ end }}
+
+{{ block "game" . }}
+<div hx-get="/game?DisplayName={{ .DisplayName }}" xhx-trigger="every 2s" hx-swap="outerHTML" class="{{ .PlaceholderClass }} game">
+  <div class="display-name">{{ .DisplayName }}</div>
+  <div>{{ .ActiveCard }}</div>
+  <div>
+    <button>Lower</button>
+    or
+    <button>Higher</button>
+  </div>
+</div>
+{{ end }}
+
+{{ block "result" . }}
+<div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" xhx-trigger="every 10s" hx-swap="outerHTML" class="game">
+  <div class="display-name">{{ .DisplayName }}</div>
+  <div>{{ .Text }}</div>
+</div>
+{{ end }}
