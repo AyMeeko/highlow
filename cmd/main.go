@@ -5,8 +5,6 @@ import (
   "io"
   "net/http"
 
-  "strconv"
-
   "github.com/labstack/echo/v4"
   "github.com/labstack/echo/v4/middleware"
   "github.com/google/uuid"
@@ -37,7 +35,8 @@ type Game struct {
   UserChoiceLower string
   UserChoiceHigher string
   PlaceholderClass string
-  Verdict bool
+  GameClass string
+  Verdict string
   State string
   Dirty bool
 }
@@ -51,7 +50,8 @@ func initializeSingleGame() Game {
   DisplayName := uuid.New().String()
   return Game {
     DisplayName: DisplayName,
-    PlaceholderClass: "placeholder",
+    PlaceholderClass: "",
+    GameClass: "hide-game",
     State: "not_started",
     Dirty: false,
   }
@@ -60,10 +60,8 @@ func initializeSingleGame() Game {
 func initializeGames(maxGames int) map[string]Game {
   games := map[string]Game{}
   for i := 0; i < maxGames; i++ {
-    i_str := strconv.Itoa(i)
     game := initializeSingleGame()
-    game.DisplayName = "AyMeeko" + i_str
-    games[game.DisplayName + i_str] = game
+    games[game.DisplayName] = game
   }
   return games
 }
@@ -71,7 +69,7 @@ func initializeGames(maxGames int) map[string]Game {
 func findEmptyGame(games map[string]Game) Game {
   var foundGame string
   for key, val := range games {
-    if val.PlaceholderClass == "placeholder" {
+    if val.PlaceholderClass == "" {
       foundGame = key
       break
     }
@@ -86,7 +84,7 @@ func isUUID(u string) bool {
 
 func main() {
   gameSession := GameSession{
-    Games: initializeGames(1),
+    Games: initializeGames(4),
   }
 
   e := echo.New()
@@ -110,8 +108,9 @@ func main() {
     case "not_started":
       return c.Render(200, "game", game)
     case "in_progress":
-      if !isUUID(game.DisplayName) && game.PlaceholderClass == "placeholder" {
-        game.PlaceholderClass = ""
+      if !isUUID(game.DisplayName) && game.PlaceholderClass == "" {
+        game.PlaceholderClass = "hide-placeholder"
+        game.GameClass = ""
         delete(gameSession.Games, displayName)
       }
       if game.Dirty {
@@ -132,11 +131,15 @@ func main() {
       result := Result {
         DisplayName: displayName,
       }
-      if game.Verdict {
+      switch game.Verdict {
+      case "correct":
         game.State = "in_progress"
         result.Text = "Correct!"
         game.ActiveCard = game.NextCard
-      } else {
+      case "won":
+        game.State = "won"
+        result.Text = "Correct!"
+      default:
         game.State = "lost"
         result.Text = "Incorrect!"
       }
@@ -201,7 +204,7 @@ func main() {
     game.ActiveCard = c.QueryParam("ActiveCard")
     game.NextCard = c.QueryParam("NextCard")
     game.State = "displaying_choice"
-    game.Verdict, _ = strconv.ParseBool(c.QueryParam("Verdict"))
+    game.Verdict = c.QueryParam("Verdict")
     userChoice := c.QueryParam("UserChoice")
     if userChoice == "h" {
       game.UserChoiceHigher = "choice-higher"
@@ -212,21 +215,6 @@ func main() {
     }
     game.Dirty = true
     gameSession.Games[displayName] = game
-    return c.String(http.StatusOK, "OK")
-  })
-
-  e.POST("/end-game", func(c echo.Context) error {
-    displayName := c.QueryParam("DisplayName")
-    game := gameSession.Games[displayName]
-    gameResult := c.QueryParam("Result")
-
-    if gameResult == "won" {
-      game.State = "won"
-    } else {
-      game.State = "lost"
-    }
-    game.Dirty = false
-    gameSession.Games[game.DisplayName] = game
     return c.String(http.StatusOK, "OK")
   })
 

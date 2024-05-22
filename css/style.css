@@ -1,5 +1,13 @@
 .placeholder {
-  /*display: none;*/
+  padding: 25px 0px;
+}
+
+.hide-placeholder {
+  display: none;
+}
+
+.hide-game {
+  display: none;
 }
 
 .center {
@@ -57,7 +65,7 @@ html{
   grid-column-gap: 10px;
   grid-row-gap: 10px;
 
-  .game {
+  .game-container {
     background-color: #333;
     padding: 20px;
     border-radius: 10px;

@@ -33,26 +33,31 @@
 {{ end }}
 
 {{ block "game" . }}
-<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 2s" hx-swap="outerHTML" class="{{ .PlaceholderClass }} game">
-  <div class="display-name center">{{ .DisplayName }}</div>
-  <div class="active-card center">{{ .ActiveCard }}</div>
-  <div class="center">
-    <button class="{{ .UserChoiceLower }}">Lower</button>
-    or
-    <button class="{{ .UserChoiceHigher }}">Higher</button>
+<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 2s" hx-swap="outerHTML" class="game-container">
+  <div class="{{ .GameClass }}">
+    <div class="display-name center">{{ .DisplayName }}</div>
+    <div class="active-card center">{{ .ActiveCard }}</div>
+    <div class="center">
+      <button class="{{ .UserChoiceLower }}">Lower</button>
+      or
+      <button class="{{ .UserChoiceHigher }}">Higher</button>
+    </div>
+  </div>
+  <div class="placeholder {{ .PlaceholderClass }}">
+    <div class="display-name center">Type "!j" to start a game!"</div>
   </div>
 </div>
 {{ end }}
 
 {{ block "result" . }}
-<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 5s" hx-swap="outerHTML" class="game">
+<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 5s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div id="result-text" class="center">{{ .Text }}</div>
 </div>
 {{ end }}
 
 {{ block "endGame" . }}
-<div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" xhx-trigger="every 10s" hx-swap="outerHTML" class="game">
+<div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" hx-trigger="every 10s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div id="result-text" class="center">{{ .Text }}</div>
 </div>
