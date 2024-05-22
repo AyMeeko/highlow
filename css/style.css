@@ -2,18 +2,49 @@
   /*display: none;*/
 }
 
+.center {
+  text-align: center;
+}
+
+#game-name {
+  font-size: 40px;
+  padding: 10px;
+}
+
+#instructions {
+  padding: 10px 0px;
+}
+
+#commands {
+  padding: 10px 0px;
+  margin-left: 400px;
+
+  li {
+    padding: 5px;
+    margin-left: 30px;
+  }
+}
+
+button {
+  padding: 5px 20px;
+  margin: 10px 2px;
+}
+
 *{
   margin:0;
   padding:0;
   box-sizing:border-box;
 }
+
 html{
   background-color:#eee;
+  font-family: sans-serif;
 }
+
 .session {
   margin: 20px auto;
   width: 800px;
-  height: 800px;
+  height: 400px;
   background-color: #fff;
   display: grid;
   grid-template-columns: 400px 400px;
@@ -26,11 +57,17 @@ html{
     padding: 20px;
     border-radius: 10px;
     color: #fff;
-    display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .display-name {
     font-size: 40px;
-    font-family: sans-serif;
+  }
+
+  .active-card {
+    font-size: 40px;
+    padding: 10px 0px;
   }
 }
 

@@ -9,6 +9,16 @@
     <link href="css/style.css" rel="stylesheet">
   </head>
   <body>
+    <p id="game-name" class="center">High/Low Game</p>
+    <div id="instructions" class="center">Try to guess if the next card will be higher or lower.</div>
+    <div id="commands" class="">
+      Chat commands:
+      <ul>
+        <li>Send "!j" in chat to join.</li>
+        <li>Send "h" in chat to guess "higher"</li>
+        <li>Send "l" in chat to guess "lower"</li>
+      </ul>
+    </div>
     {{ template "gameSession" . }}
   </body>
 </html>
@@ -24,9 +34,9 @@
 
 {{ block "game" . }}
 <div hx-get="/game?DisplayName={{ .DisplayName }}" xhx-trigger="every 2s" hx-swap="outerHTML" class="{{ .PlaceholderClass }} game">
-  <div class="display-name">{{ .DisplayName }}</div>
-  <div>{{ .ActiveCard }}</div>
-  <div>
+  <div class="display-name center">{{ .DisplayName }}</div>
+  <div class="active-card center">{{ .ActiveCard }}8</div>
+  <div class="center">
     <button>Lower</button>
     or
     <button>Higher</button>
@@ -36,7 +46,7 @@
 
 {{ block "result" . }}
 <div hx-post="/install-placeholder?DisplayName={{ .DisplayName }}" xhx-trigger="every 10s" hx-swap="outerHTML" class="game">
-  <div class="display-name">{{ .DisplayName }}</div>
-  <div>{{ .Text }}</div>
+  <div class="display-name center">{{ .DisplayName }}</div>
+  <div class="center">{{ .Text }}</div>
 </div>
 {{ end }}
