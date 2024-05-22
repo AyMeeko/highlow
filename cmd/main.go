@@ -5,8 +5,6 @@ import (
   "io"
   "net/http"
 
-  Highlow "highlow/cmd/highlow"
-
   "github.com/labstack/echo/v4"
   "github.com/labstack/echo/v4/middleware"
   "github.com/google/uuid"
