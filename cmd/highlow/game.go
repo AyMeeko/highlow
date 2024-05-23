@@ -16,7 +16,6 @@ import (
 )
 
 type Player struct {
-  id string
   displayName string
 }
 
@@ -44,9 +43,8 @@ func createAndShuffleDeck() []int {
   return deckCards
 }
 
-func createGame(userId, displayName string) *Game {
+func createGame(displayName string) *Game {
   player := Player{
-    id: userId,
     displayName: displayName,
   }
 
@@ -61,7 +59,7 @@ func createGame(userId, displayName string) *Game {
   }
 }
 
-func handleMessage(restClient *resty.Client, session *map[string]*Game, displayName, message, userId string) {
+func handleMessage(restClient *resty.Client, session *map[string]*Game, displayName, message string) {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
     os.Exit(0)
@@ -73,7 +71,7 @@ func handleMessage(restClient *resty.Client, session *map[string]*Game, displayN
     }
     game, ok := (*session)[displayName]
     if !ok {
-      game = createGame(userId, displayName)
+      game = createGame(displayName)
       (*session)[displayName] = game
 
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
@@ -145,7 +143,6 @@ func main() {
   client.OnPrivateMessage(func(rawMessage twitch.PrivateMessage) {
     displayName := rawMessage.User.DisplayName
     message := strings.ToLower(rawMessage.Message)
-    userId := rawMessage.User.ID
 
     go func() {
       if rateLimit[displayName] {
@@ -161,7 +158,7 @@ func main() {
           DisplayName: displayName,
           RateLimited: true,
         }
-        handleMessage(restClient, &session, displayName, message, userId)
+        handleMessage(restClient, &session, displayName, message)
         time.Sleep(2*time.Second)
         if session[displayName].player.rateLimited {
           session[displayName].player.rateLimited = false
