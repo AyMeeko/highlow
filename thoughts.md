@@ -109,3 +109,13 @@ the "initialize-placeholder" endpoint will render "game"
 - needs to render the game with the choice highlighted
 - needs to render whether the choice was correct
 - needs to render the 'lost' OR new number
+
+
+maybe there's just one channel and i have a new mapping of DisplayName: bool that indicates
+whether they're rate limited
+
+- program starts, initialize session, channel, and rateLimiter mapping (default false)
+- inside the OnPrivateMessage function,
+    - if !rateLimiter[displayName] { handleMessage }
+
+
