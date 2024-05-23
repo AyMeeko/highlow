@@ -7,6 +7,7 @@ import (
   "fmt"
   "math/rand"
   "os"
+  "strings"
   "time"
 
   "github.com/gempir/go-twitch-irc/v4"
@@ -83,7 +84,7 @@ func handleMessage(restClient *resty.Client, session *map[string]*Game, displayN
       activeCard := game.deck.cards[game.deck.pointer]
       nextCard := game.deck.cards[game.deck.pointer + 1]
       result := (message == "h" && nextCard > activeCard) || (message == "l" && nextCard < activeCard)
-      if result == true {
+      if result {
         game.deck.pointer += 1
         if game.deck.pointer == len(game.deck.cards)-1 {
           fmt.Println("Correct! You win!!")
@@ -133,7 +134,7 @@ func main() {
 
   client.OnPrivateMessage(func(rawMessage twitch.PrivateMessage) {
     displayName := rawMessage.User.DisplayName
-    message := rawMessage.Message
+    message := strings.ToLower(rawMessage.Message)
     userId := rawMessage.User.ID
 
     go func() {
