@@ -36,7 +36,7 @@ func createAndShuffleDeck() []int {
   return deckCards
 }
 
-func newGame(userId, displayName string) Game {
+func createGame(userId, displayName string) Game {
   player := Player{
     id: userId,
     displayName: displayName,
@@ -53,7 +53,7 @@ func newGame(userId, displayName string) Game {
   }
 }
 
-func HandleMessage(restClient *resty.Client, session map[string]Game, displayName, message, userId string) map[string]Game {
+func handleMessage(restClient *resty.Client, session map[string]Game, displayName, message, userId string) map[string]Game {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
     os.Exit(0)
@@ -65,7 +65,7 @@ func HandleMessage(restClient *resty.Client, session map[string]Game, displayNam
     }
     game, ok := session[displayName]
     if !ok {
-      game = newGame(userId, displayName)
+      game = createGame(userId, displayName)
       session[displayName] = game
     }
     fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
@@ -81,15 +81,15 @@ func HandleMessage(restClient *resty.Client, session map[string]Game, displayNam
         if game.deck.pointer == len(game.deck.cards)-1 {
           fmt.Println("Correct! You win!!")
           delete(session, displayName)
-          updateGame(restClient, displayName, activeCard, message, "won", nextCard)
+          triggerGameUpdate(restClient, displayName, activeCard, message, "won", nextCard)
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
-          updateGame(restClient, displayName, activeCard, message, "correct", nextCard)
+          triggerGameUpdate(restClient, displayName, activeCard, message, "correct", nextCard)
         }
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
         delete(session, displayName)
-        updateGame(restClient, displayName, activeCard, message, "lost", nextCard)
+        triggerGameUpdate(restClient, displayName, activeCard, message, "lost", nextCard)
       }
     }
   }
@@ -105,7 +105,7 @@ func triggerNewGame(restClient *resty.Client, displayName string, activeCard int
   restClient.R().EnableTrace().Post(url)
 }
 
-func updateGame(restClient *resty.Client, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
+func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
   url := fmt.Sprintf(
     "http://localhost:42069/game?DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
     displayName,
@@ -128,7 +128,7 @@ func main() {
     message := rawMessage.Message
     userId := rawMessage.User.ID
 
-    session = HandleMessage(restClient, session, displayName, message, userId)
+    session = handleMessage(restClient, session, displayName, message, userId)
   })
 
   client.Join("AyMeeko")
