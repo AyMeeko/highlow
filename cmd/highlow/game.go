@@ -7,6 +7,7 @@ import (
   "fmt"
   "math/rand"
   "os"
+  "time"
 
   "github.com/gempir/go-twitch-irc/v4"
   "github.com/go-resty/resty/v2"
@@ -20,11 +21,21 @@ type Player struct {
 type Game struct {
   player *Player
   deck *Deck
+  nextMoveTime time.Time
 }
 
 type Deck struct {
   cards []int
   pointer int
+}
+
+func generateNextMoveTime() time.Time {
+  now := time.Now()
+  return now.Add(2 * time.Second)
+}
+
+func playerCanMove(game *Game) bool {
+  return game.nextMoveTime.Before(time.Now())
 }
 
 func createAndShuffleDeck() []int {
@@ -36,7 +47,7 @@ func createAndShuffleDeck() []int {
   return deckCards
 }
 
-func createGame(userId, displayName string) Game {
+func createGame(userId, displayName string) *Game {
   player := Player{
     id: userId,
     displayName: displayName,
@@ -47,13 +58,14 @@ func createGame(userId, displayName string) Game {
     pointer: 0,
   }
 
-  return Game{
+  return &Game{
     player: &player,
     deck: &deck,
+    nextMoveTime: generateNextMoveTime(),
   }
 }
 
-func handleMessage(restClient *resty.Client, session map[string]Game, displayName, message, userId string) map[string]Game {
+func handleMessage(restClient *resty.Client, session map[string]*Game, displayName, message, userId string) map[string]*Game {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
     os.Exit(0)
@@ -67,12 +79,13 @@ func handleMessage(restClient *resty.Client, session map[string]Game, displayNam
     if !ok {
       game = createGame(userId, displayName)
       session[displayName] = game
+
+      fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
+      triggerNewGame(restClient, displayName, game.deck.cards[game.deck.pointer])
     }
-    fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
-    triggerNewGame(restClient, displayName, game.deck.cards[game.deck.pointer])
   } else if message == "h" || message == "l" {
     game, ok := session[displayName]
-    if ok {
+    if ok && playerCanMove(game) {
       activeCard := game.deck.cards[game.deck.pointer]
       nextCard := game.deck.cards[game.deck.pointer + 1]
       result := (message == "h" && nextCard > activeCard) || (message == "l" && nextCard < activeCard)
@@ -86,6 +99,7 @@ func handleMessage(restClient *resty.Client, session map[string]Game, displayNam
           fmt.Printf("Correct! Active card: %d\n", nextCard)
           triggerGameUpdate(restClient, displayName, activeCard, message, "correct", nextCard)
         }
+        game.nextMoveTime = generateNextMoveTime()
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
         delete(session, displayName)
@@ -119,7 +133,7 @@ func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard 
 
 func main() {
   restClient := resty.New()
-  session := map[string]Game{}
+  session := map[string]*Game{}
 
   client := twitch.NewAnonymousClient()
 
