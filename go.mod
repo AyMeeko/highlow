@@ -1,10 +1,8 @@
 module highlow
 
-go 1.22.2
+go 1.18
 
 require (
-	github.com/gempir/go-twitch-irc/v4 v4.0.0
-	github.com/go-resty/resty/v2 v2.13.1
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.12.0
 )
