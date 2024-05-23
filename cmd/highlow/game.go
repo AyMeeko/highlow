@@ -6,6 +6,7 @@ package main
 import (
   "fmt"
   "math/rand"
+  "os"
 
   "github.com/gempir/go-twitch-irc/v4"
   "github.com/go-resty/resty/v2"
@@ -53,6 +54,10 @@ func newGame(userId, displayName string) Game {
 }
 
 func HandleMessage(restClient *resty.Client, session map[string]Game, displayName, message, userId string) map[string]Game {
+  if message == "!shutdown" && displayName == "AyMeeko" {
+    fmt.Println("Shutting down server...")
+    os.Exit(0)
+  }
   if message == "!j" {
     if len(session) == 4 {
       fmt.Println("Sorry, reached max number of players.")
@@ -65,7 +70,7 @@ func HandleMessage(restClient *resty.Client, session map[string]Game, displayNam
     }
     fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
     triggerNewGame(restClient, displayName, game.deck.cards[game.deck.pointer])
-  } else {
+  } else if message == "h" || message == "l" {
     game, ok := session[displayName]
     if ok {
       activeCard := game.deck.cards[game.deck.pointer]
