@@ -38,9 +38,12 @@
     <div class="display-name center">{{ .DisplayName }}</div>
     <div class="active-card center">{{ .ActiveCard }}</div>
     <div class="center">
-      <button class="{{ .UserChoiceLower }}">Lower</button>
+      <button class="{{ .UserChoiceLowerClass }}">Lower</button>
       or
-      <button class="{{ .UserChoiceHigher }}">Higher</button>
+      <button class="{{ .UserChoiceHigherClass }}">Higher</button>
+    </div>
+    <div class="center notification-text {{ .HideNotificationTextClass }}">
+      {{ .NotificationText }}
     </div>
   </div>
   <div class="placeholder {{ .PlaceholderClass }}">
@@ -53,6 +56,9 @@
 <div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 3s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div id="result-text" class="center">{{ .Text }}</div>
+  <div class="center notification-text {{ .HideNotificationTextClass }}">
+    {{ .NotificationText }}
+  </div>
 </div>
 {{ end }}
 

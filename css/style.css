@@ -1,4 +1,5 @@
 .placeholder {
+  /*display: none;*/
   padding: 25px 0px;
 }
 
@@ -7,6 +8,14 @@
 }
 
 .hide-game {
+  display: none;
+}
+
+.notification-text {
+  font-size: 20px;
+}
+
+.hide-notification {
   display: none;
 }
 
@@ -84,7 +93,7 @@ html{
   }
 
   .choice-higher, .choice-lower {
-    background: lightgreen;
+    background: slateblue;
   }
 }
 

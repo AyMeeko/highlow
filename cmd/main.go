@@ -32,28 +32,34 @@ type Game struct {
   DisplayName string
   ActiveCard string
   NextCard string
-  UserChoiceLower string
-  UserChoiceHigher string
-  PlaceholderClass string
-  GameClass string
   Verdict string
   State string
   Dirty bool
+  UserChoiceLowerClass string
+  UserChoiceHigherClass string
+  PlaceholderClass string
+  GameClass string
+  HideNotificationTextClass string
+  NotificationText string
 }
 
 type Result struct {
   DisplayName string
   Text string
+  HideNotificationTextClass string
+  NotificationText string
 }
 
 func initializeSingleGame() Game {
   DisplayName := uuid.New().String()
+  //DisplayName = "AyMeeko"
   return Game {
     DisplayName: DisplayName,
-    PlaceholderClass: "",
-    GameClass: "hide-game",
     State: "not_started",
     Dirty: false,
+    PlaceholderClass: "",
+    GameClass: "hide-game",
+    HideNotificationTextClass: "hide-notification",
   }
 }
 
@@ -102,7 +108,7 @@ func main() {
     displayName := c.QueryParam("DisplayName")
     game, ok := gameSession.Games[displayName]
     if !ok {
-      return c.Render(500, "game", game)
+      return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     switch game.State {
     case "not_started":
@@ -126,10 +132,12 @@ func main() {
       gameSession.Games[game.DisplayName] = game
       return c.Render(200, "game", game)
     case "displaying_result":
-      game.UserChoiceLower = ""
-      game.UserChoiceHigher = ""
+      game.UserChoiceLowerClass = ""
+      game.UserChoiceHigherClass = ""
       result := Result {
         DisplayName: displayName,
+        NotificationText: game.NotificationText,
+        HideNotificationTextClass: game.HideNotificationTextClass,
       }
       switch game.Verdict {
       case "correct":
@@ -150,16 +158,20 @@ func main() {
       result := Result {
         DisplayName: displayName,
         Text: "You win!!",
+        NotificationText: game.NotificationText,
+        HideNotificationTextClass: game.HideNotificationTextClass,
       }
       return c.Render(200, "endGame", result)
     case "lost":
       result := Result {
         DisplayName: displayName,
         Text: "You lost!",
+        NotificationText: game.NotificationText,
+        HideNotificationTextClass: game.HideNotificationTextClass,
       }
       return c.Render(200, "endGame", result)
     default:
-      return c.Render(500, "game", game)
+      return c.String(http.StatusInternalServerError, "InternalServerError")
     }
   })
 
@@ -167,7 +179,7 @@ func main() {
     displayName := c.QueryParam("DisplayName")
     game, ok := gameSession.Games[displayName]
     if !ok {
-      return c.Render(500, "game", game)
+      return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     if !isUUID(game.DisplayName) {
       game = initializeSingleGame()
@@ -183,7 +195,7 @@ func main() {
     displayName := c.QueryParam("DisplayName")
     _, ok := gameSession.Games[displayName]
     if ok {
-      return c.Render(500, "gameSession", gameSession)
+      return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     emptyGame := findEmptyGame(gameSession.Games)
     game := Game {
@@ -206,13 +218,30 @@ func main() {
     game.Verdict = c.QueryParam("Verdict")
     userChoice := c.QueryParam("UserChoice")
     if userChoice == "h" {
-      game.UserChoiceHigher = "choice-higher"
-      game.UserChoiceLower = ""
+      game.UserChoiceHigherClass = "choice-higher"
+      game.UserChoiceLowerClass = ""
     } else if userChoice == "l" {
-      game.UserChoiceLower = "choice-lower"
-      game.UserChoiceHigher = ""
+      game.UserChoiceLowerClass = "choice-lower"
+      game.UserChoiceHigherClass = ""
     }
     game.Dirty = true
+    gameSession.Games[displayName] = game
+    return c.String(http.StatusOK, "OK")
+  })
+
+  e.POST("/update-notification", func(c echo.Context) error {
+    displayName := c.QueryParam("DisplayName")
+    game, ok := gameSession.Games[displayName]
+    if !ok {
+      return c.String(http.StatusInternalServerError, "InternalServerError")
+    }
+    game.NotificationText = c.QueryParam("NotificationText")
+    if game.NotificationText == "" {
+      game.HideNotificationTextClass = "hide-notification"
+    } else {
+      game.HideNotificationTextClass = ""
+    }
+    game.Dirty = false
     gameSession.Games[displayName] = game
     return c.String(http.StatusOK, "OK")
   })

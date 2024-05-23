@@ -6,6 +6,7 @@ package main
 import (
   "fmt"
   "math/rand"
+  "net/url"
   "os"
   "strings"
   "time"
@@ -104,16 +105,16 @@ func handleMessage(restClient *resty.Client, session *map[string]*Game, displayN
 }
 
 func triggerNewGame(restClient *resty.Client, displayName string, activeCard int) {
-  url := fmt.Sprintf(
+  targetUrl := fmt.Sprintf(
     "http://localhost:42069/new-game?DisplayName=%s&ActiveCard=%d",
     displayName,
     activeCard,
   )
-  restClient.R().EnableTrace().Post(url)
+  restClient.R().EnableTrace().Post(targetUrl)
 }
 
 func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
-  url := fmt.Sprintf(
+  targetUrl := fmt.Sprintf(
     "http://localhost:42069/game?DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
     displayName,
     activeCard,
@@ -121,7 +122,16 @@ func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard 
     verdict,
     nextCard,
   )
-  restClient.R().EnableTrace().Post(url)
+  restClient.R().EnableTrace().Post(targetUrl)
+}
+
+func triggerNotificationUpdate(restClient *resty.Client, displayName string, text string) {
+  targetUrl := fmt.Sprintf(
+    "http://localhost:42069/update-notification?DisplayName=%s&NotificationText=%s",
+    displayName,
+    url.QueryEscape(text),
+  )
+  restClient.R().EnableTrace().Post(targetUrl)
 }
 
 func main() {
@@ -139,6 +149,12 @@ func main() {
 
     go func() {
       if rateLimit[displayName] {
+        triggerNotificationUpdate(
+          restClient,
+          displayName,
+          "Fastest fingers in the west! Slow down with your messages.",
+        )
+        session[displayName].player.rateLimited = true
         fmt.Printf("Rate limited %s\n", displayName)
       } else {
         channel <- ChannelMessage {
@@ -147,6 +163,10 @@ func main() {
         }
         handleMessage(restClient, &session, displayName, message, userId)
         time.Sleep(2*time.Second)
+        if session[displayName].player.rateLimited {
+          session[displayName].player.rateLimited = false
+          triggerNotificationUpdate(restClient, displayName, "")
+        }
         channel <- ChannelMessage {
           DisplayName: displayName,
           RateLimited: false,
