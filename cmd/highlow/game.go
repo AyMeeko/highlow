@@ -21,7 +21,6 @@ type Player struct {
 type Game struct {
   player *Player
   deck *Deck
-  nextMoveTime time.Time
 }
 
 type Deck struct {
@@ -29,13 +28,9 @@ type Deck struct {
   pointer int
 }
 
-func generateNextMoveTime() time.Time {
-  now := time.Now()
-  return now.Add(2 * time.Second)
-}
-
-func playerCanMove(game *Game) bool {
-  return game.nextMoveTime.Before(time.Now())
+type ChannelMessage struct {
+  DisplayName string
+  RateLimited bool
 }
 
 func createAndShuffleDeck() []int {
@@ -61,31 +56,30 @@ func createGame(userId, displayName string) *Game {
   return &Game{
     player: &player,
     deck: &deck,
-    nextMoveTime: generateNextMoveTime(),
   }
 }
 
-func handleMessage(restClient *resty.Client, session map[string]*Game, displayName, message, userId string) map[string]*Game {
+func handleMessage(restClient *resty.Client, session *map[string]*Game, displayName, message, userId string) {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
     os.Exit(0)
   }
+
   if message == "!j" {
-    if len(session) == 4 {
+    if len(*session) == 4 {
       fmt.Println("Sorry, reached max number of players.")
-      return nil
     }
-    game, ok := session[displayName]
+    game, ok := (*session)[displayName]
     if !ok {
       game = createGame(userId, displayName)
-      session[displayName] = game
+      (*session)[displayName] = game
 
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.deck.cards[game.deck.pointer])
       triggerNewGame(restClient, displayName, game.deck.cards[game.deck.pointer])
     }
   } else if message == "h" || message == "l" {
-    game, ok := session[displayName]
-    if ok && playerCanMove(game) {
+    game, ok := (*session)[displayName]
+    if ok {
       activeCard := game.deck.cards[game.deck.pointer]
       nextCard := game.deck.cards[game.deck.pointer + 1]
       result := (message == "h" && nextCard > activeCard) || (message == "l" && nextCard < activeCard)
@@ -93,21 +87,19 @@ func handleMessage(restClient *resty.Client, session map[string]*Game, displayNa
         game.deck.pointer += 1
         if game.deck.pointer == len(game.deck.cards)-1 {
           fmt.Println("Correct! You win!!")
-          delete(session, displayName)
+          delete((*session), displayName)
           triggerGameUpdate(restClient, displayName, activeCard, message, "won", nextCard)
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
           triggerGameUpdate(restClient, displayName, activeCard, message, "correct", nextCard)
         }
-        game.nextMoveTime = generateNextMoveTime()
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
-        delete(session, displayName)
+        delete((*session), displayName)
         triggerGameUpdate(restClient, displayName, activeCard, message, "lost", nextCard)
       }
     }
   }
-  return session
 }
 
 func triggerNewGame(restClient *resty.Client, displayName string, activeCard int) {
@@ -133,7 +125,9 @@ func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard 
 
 func main() {
   restClient := resty.New()
-  session := map[string]*Game{}
+  session := make(map[string]*Game)
+  channel := make(chan ChannelMessage)
+  rateLimit := make(map[string]bool)
 
   client := twitch.NewAnonymousClient()
 
@@ -142,8 +136,30 @@ func main() {
     message := rawMessage.Message
     userId := rawMessage.User.ID
 
-    session = handleMessage(restClient, session, displayName, message, userId)
+    go func() {
+      if rateLimit[displayName] {
+        fmt.Printf("Rate limited %s\n", displayName)
+      } else {
+        channel <- ChannelMessage {
+          DisplayName: displayName,
+          RateLimited: true,
+        }
+        handleMessage(restClient, &session, displayName, message, userId)
+        time.Sleep(2*time.Second)
+        channel <- ChannelMessage {
+          DisplayName: displayName,
+          RateLimited: false,
+        }
+      }
+    }()
   })
+
+  go func() {
+    for {
+      msg := <-channel
+      rateLimit[msg.DisplayName] = msg.RateLimited
+    }
+  }()
 
   client.Join("AyMeeko")
 
