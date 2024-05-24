@@ -19,17 +19,26 @@
         <li>Send "l" in chat to guess "lower"</li>
       </ul>
     </div>
-    {{ template "gameSession" . }}
+    {{ template "session" . }}
   </body>
 </html>
 {{ end }}
 
-{{ block "gameSession" . }}
+{{ block "session" . }}
   <div class="session">
-    {{ range $Games := .Games }}
-      {{ template "game" . }}
-    {{ end }}
+    {{ template "placeholder" . }}
+    {{ template "placeholder" . }}
+    {{ template "placeholder" . }}
+    {{ template "placeholder" . }}
   </div>
+{{ end }}
+
+{{ block "placeholder" . }}
+<div hx-get="/check-for-new-game" hx-trigger="every 1s" hx-swap="outerHTML" class="placeholder-container">
+  <div class="placeholder">
+    <div class="display-name center">Type "!j" to start a game!"</div>
+  </div>
+</div>
 {{ end }}
 
 {{ block "game" . }}
@@ -45,9 +54,6 @@
     <div class="center notification-text {{ .HideNotificationTextClass }}">
       {{ .NotificationText }}
     </div>
-  </div>
-  <div class="placeholder {{ .PlaceholderClass }}">
-    <div class="display-name center">Type "!j" to start a game!"</div>
   </div>
 </div>
 {{ end }}

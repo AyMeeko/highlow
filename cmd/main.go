@@ -1,13 +1,14 @@
 package main
 
 import (
+  "fmt"
   "html/template"
   "io"
   "net/http"
 
+  "github.com/google/uuid"
   "github.com/labstack/echo/v4"
   "github.com/labstack/echo/v4/middleware"
-  "github.com/google/uuid"
 )
 
 type Templates struct {
@@ -24,8 +25,12 @@ func newTemplate() *Templates {
   }
 }
 
-type GameSession struct {
-  Games map[string]Game
+type PlayerSession struct {
+  DisplayName string
+  ActiveGame *Game
+  HiScore int
+  NumGames int
+  NumWins int
 }
 
 type Game struct {
@@ -41,6 +46,11 @@ type Game struct {
   GameClass string
   HideNotificationTextClass string
   NotificationText string
+  Rendered bool
+}
+
+type Placeholder struct {
+  visible bool
 }
 
 type Result struct {
@@ -50,26 +60,23 @@ type Result struct {
   NotificationText string
 }
 
-func initializeSingleGame() Game {
-  DisplayName := uuid.New().String()
-  //DisplayName = "AyMeeko"
-  return Game {
-    DisplayName: DisplayName,
-    State: "not_started",
-    Dirty: false,
-    PlaceholderClass: "",
-    GameClass: "hide-game",
-    HideNotificationTextClass: "hide-notification",
+func initializePlayerSession(displayName string) *PlayerSession {
+  return &PlayerSession {
+    DisplayName: displayName,
+    HiScore: 0,
+    NumGames: 0,
+    NumWins: 0,
   }
 }
 
-func initializeGames(maxGames int) map[string]Game {
-  games := map[string]Game{}
-  for i := 0; i < maxGames; i++ {
-    game := initializeSingleGame()
-    games[game.DisplayName] = game
+func initializeGame(displayName string, activeCard string) *Game {
+  return &Game {
+    DisplayName: displayName,
+    ActiveCard: activeCard,
+    State: "in_progress",
+    Rendered: false,
+    HideNotificationTextClass: "hide-notification",
   }
-  return games
 }
 
 func findEmptyGame(games map[string]Game) Game {
@@ -89,9 +96,10 @@ func isUUID(u string) bool {
 }
 
 func main() {
-  gameSession := GameSession{
-    Games: initializeGames(4),
+  placeholder := Placeholder {
+    visible: true,
   }
+  session := make(map[string]*PlayerSession)
 
   e := echo.New()
   e.Use(middleware.Logger())
@@ -101,35 +109,24 @@ func main() {
   // Browser routes
   e.Static("/css", "css")
   e.GET("/", func(c echo.Context) error {
-    return c.Render(200, "index", gameSession)
+    return c.Render(200, "index", session)
   })
 
   e.GET("/game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    game, ok := gameSession.Games[displayName]
-    if !ok {
+    playerSession, ok := session[displayName]
+    game := playerSession.ActiveGame
+
+    if !ok || game == nil {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     switch game.State {
     case "not_started":
       return c.Render(200, "game", game)
     case "in_progress":
-      if !isUUID(game.DisplayName) && game.PlaceholderClass == "" {
-        game.PlaceholderClass = "hide-placeholder"
-        game.GameClass = ""
-        delete(gameSession.Games, displayName)
-      }
-      if game.Dirty {
-        // htmx wont actually re-render unless the gameSession object itself has changed
-        // even if the underlying objects have changed.
-        game.Dirty = false
-        gameSession.Games[game.DisplayName] = game
-      }
       return c.Render(200, "game", game)
     case "displaying_choice":
       game.State = "displaying_result"
-      game.Dirty = false
-      gameSession.Games[game.DisplayName] = game
       return c.Render(200, "game", game)
     case "displaying_result":
       game.UserChoiceLowerClass = ""
@@ -151,8 +148,6 @@ func main() {
         game.State = "lost"
         result.Text = "Incorrect!"
       }
-      game.Dirty = false
-      gameSession.Games[game.DisplayName] = game
       return c.Render(200, "result", result)
     case "won":
       result := Result {
@@ -177,41 +172,51 @@ func main() {
 
   e.POST("/install-placeholder", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    game, ok := gameSession.Games[displayName]
+    playerSession, ok := session[displayName]
+
     if !ok {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
-    if !isUUID(game.DisplayName) {
-      game = initializeSingleGame()
-      delete(gameSession.Games, displayName)
-      game.Dirty = false
-      gameSession.Games[game.DisplayName] = game
+    playerSession.ActiveGame = nil
+    return c.Render(200, "placeholder", placeholder)
+  })
+
+  e.GET("/check-for-new-game", func(c echo.Context) error {
+    for _, playerSession := range session {
+      game := playerSession.ActiveGame
+      if game != nil {
+        game.Rendered = true
+        return c.Render(200, "game", game)
+      }
     }
-    return c.Render(200, "game", game)
+    return c.Render(200, "placeholder", placeholder)
   })
 
   // HighLow game routes
   e.POST("/new-game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    _, ok := gameSession.Games[displayName]
-    if ok {
+    playerSession, ok := session[displayName]
+
+    if !ok {
+      playerSession = initializePlayerSession(displayName)
+      session[displayName] = playerSession
+    }
+    if playerSession.ActiveGame != nil {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
-    emptyGame := findEmptyGame(gameSession.Games)
-    game := Game {
-      DisplayName: displayName,
-      ActiveCard: c.QueryParam("ActiveCard"),
-      State: "in_progress",
-      Dirty: true,
-    }
-    gameSession.Games[emptyGame.DisplayName] = game
+    playerSession.ActiveGame = initializeGame(displayName, c.QueryParam("ActiveCard"))
+
     return c.String(http.StatusOK, "OK")
   })
 
   e.POST("/game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    game := gameSession.Games[displayName]
-    game.DisplayName = displayName
+    playerSession, ok := session[displayName]
+
+    if !ok || (ok && playerSession.ActiveGame == nil) {
+      return c.String(http.StatusInternalServerError, "InternalServerError")
+    }
+    game := playerSession.ActiveGame
     game.ActiveCard = c.QueryParam("ActiveCard")
     game.NextCard = c.QueryParam("NextCard")
     game.State = "displaying_choice"
@@ -224,25 +229,23 @@ func main() {
       game.UserChoiceLowerClass = "choice-lower"
       game.UserChoiceHigherClass = ""
     }
-    game.Dirty = true
-    gameSession.Games[displayName] = game
     return c.String(http.StatusOK, "OK")
   })
 
   e.POST("/update-notification", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    game, ok := gameSession.Games[displayName]
-    if !ok {
+    playerSession, ok := session[displayName]
+
+    if !ok || (ok && playerSession.ActiveGame == nil) {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
+    game := playerSession.ActiveGame
     game.NotificationText = c.QueryParam("NotificationText")
     if game.NotificationText == "" {
       game.HideNotificationTextClass = "hide-notification"
     } else {
       game.HideNotificationTextClass = ""
     }
-    game.Dirty = false
-    gameSession.Games[displayName] = game
     return c.String(http.StatusOK, "OK")
   })
 

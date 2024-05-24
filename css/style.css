@@ -74,7 +74,7 @@ html{
   grid-column-gap: 10px;
   grid-row-gap: 10px;
 
-  .game-container {
+  .game-container, .placeholder-container {
     background-color: #333;
     padding: 20px;
     border-radius: 10px;

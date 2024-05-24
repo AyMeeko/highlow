@@ -119,3 +119,15 @@ whether they're rate limited
     - if !rateLimiter[displayName] { handleMessage }
 
 
+
+
+
+## main.go refactor
+- index loads all the placeholders
+- the placeholder html is distinct from the game html
+- the placeholder html pings the server and
+    if there's a new game to slot, it renders the "game" block in its place
+        else renders placeholder again
+- when a game ends, render placeholder html again
+
+when the placeholder makes the request to the server, how does the server know there is a new game to render?
