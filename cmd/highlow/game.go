@@ -18,7 +18,7 @@ import (
 
 const baseUrl = "http://localhost:42069"
 const enableLogging = false
-const gameExpirationTime = 5 * time.Minute
+const gameExpirationTime = 1 * time.Minute
 const rateLimitDuration = 3 * time.Second
 var restClient = resty.New()
 
@@ -52,8 +52,12 @@ func createLimiterCountdown(displayName string) *time.Timer {
   })
 }
 
-func createGameTimeoutCountdown(displayName string) *time.Timer {
+func createGameTimeoutCountdown(playerSession *PlayerSession) *time.Timer {
   return time.AfterFunc(gameExpirationTime, func() {
+    displayName := playerSession.ActiveGame.DisplayName
+    playerSession.Lock.Lock()
+    playerSession.ActiveGame = nil
+    playerSession.Lock.Unlock()
     triggerGameExpiration(displayName)
   })
 }
@@ -105,7 +109,7 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
     if playerSession.ActiveGame == nil {
       game := createGame(displayName)
       playerSession.ActiveGame = game
-      game.Timeout = createGameTimeoutCountdown(displayName)
+      game.Timeout = createGameTimeoutCountdown(playerSession)
       (*session)[displayName] = playerSession
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.Deck.Cards[game.Deck.Pointer])
       triggerNewGame(playerSession, displayName, game.Deck.Cards[game.Deck.Pointer])
@@ -132,7 +136,7 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
           triggerGameUpdate(playerSession, displayName, activeCard, message, "correct", nextCard, game.Score)
-          game.Timeout = createGameTimeoutCountdown(displayName)
+          game.Timeout = createGameTimeoutCountdown(playerSession)
         }
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
