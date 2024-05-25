@@ -245,7 +245,7 @@ func main() {
     }()
   })
 
-  client.Join("AyMeeko")
+  client.Join("PlayHighLow")
 
   err := client.Connect()
   if err != nil {
