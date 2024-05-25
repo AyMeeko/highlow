@@ -66,6 +66,7 @@ type PlayerSession struct {
   HiScore string
   NumGames string
   NumWins string
+  RefreshRate string
 }
 
 type Game struct {
@@ -73,10 +74,13 @@ type Game struct {
   ActiveCard string
   NextCard string
   Score string
+  RealTimeScore string
   Verdict string
   State string
   UserChoiceLowerClass string
   UserChoiceHigherClass string
+  CorrectChoiceLowerClass string
+  CorrectChoiceHigherClass string
   HideNotificationTextClass string
   NotificationText string
   Rendered bool
@@ -97,6 +101,7 @@ func initializePlayerSession(displayName string) *PlayerSession {
     HiScore: "0",
     NumGames: "0",
     NumWins: "0",
+    RefreshRate: "1",
   }
 }
 
@@ -105,6 +110,7 @@ func initializeGame(displayName string, activeCard string) *Game {
     DisplayName: displayName,
     ActiveCard: activeCard,
     Score: "0",
+    RealTimeScore: "0",
     State: "in_progress",
     Rendered: false,
     HideNotificationTextClass: "hide-notification",
@@ -148,28 +154,48 @@ func main() {
       return c.Render(200, "playerSession", playerSession)
     case "displaying_choice":
       game.State = "displaying_result"
+      playerSession.RefreshRate = "2"
       return c.Render(200, "playerSession", playerSession)
     case "displaying_result":
-      game.UserChoiceLowerClass = ""
-      game.UserChoiceHigherClass = ""
-      result := Result {
-        DisplayName: displayName,
-        NotificationText: game.NotificationText,
-        HideNotificationTextClass: game.HideNotificationTextClass,
-      }
       switch game.Verdict {
       case "correct":
-        game.State = "in_progress"
-        result.Text = "Correct!"
-        game.ActiveCard = game.NextCard
+        game.State = "clear_result"
+        if game.UserChoiceLowerClass != "" {
+          game.UserChoiceLowerClass = ""
+          game.CorrectChoiceLowerClass = "correct-choice-lower"
+        } else if game.UserChoiceHigherClass != "" {
+          game.UserChoiceHigherClass = ""
+          game.CorrectChoiceHigherClass = "correct-choice-higher"
+        }
+        game.Score = game.RealTimeScore
       case "won":
         game.State = "won"
-        result.Text = "Correct!"
+        if game.UserChoiceLowerClass != "" {
+          game.UserChoiceLowerClass = ""
+          game.CorrectChoiceLowerClass = "correct-choice-lower"
+        } else if game.UserChoiceHigherClass != "" {
+          game.UserChoiceHigherClass = ""
+          game.CorrectChoiceHigherClass = "correct-choice-higher"
+        }
+        game.Score = game.RealTimeScore
       default:
         game.State = "lost"
-        result.Text = "Incorrect!"
+        if game.UserChoiceLowerClass != "" {
+          game.CorrectChoiceHigherClass = "correct-choice-higher"
+        } else if game.UserChoiceHigherClass != "" {
+          game.CorrectChoiceLowerClass = "correct-choice-lower"
+        }
       }
-      return c.Render(200, "result", result)
+      return c.Render(200, "playerSession", playerSession)
+    case "clear_result":
+      game.State = "in_progress"
+      game.UserChoiceLowerClass = ""
+      game.UserChoiceHigherClass = ""
+      game.CorrectChoiceLowerClass = ""
+      game.CorrectChoiceHigherClass = ""
+      game.ActiveCard = game.NextCard
+      playerSession.RefreshRate = "1"
+      return c.Render(200, "playerSession", playerSession)
     case "won":
       result := Result {
         DisplayName: displayName,
@@ -247,17 +273,18 @@ func main() {
     game.ActiveCard = c.FormValue("ActiveCard")
     game.NextCard = c.FormValue("NextCard")
     game.Verdict = c.FormValue("Verdict")
-    game.Score = c.FormValue("Score")
+    game.Score = game.RealTimeScore
+    game.RealTimeScore = c.FormValue("Score")
     userChoice := c.FormValue("UserChoice")
     playerSession.HiScore = c.FormValue("HiScore")
     playerSession.NumGames = c.FormValue("NumGames")
     playerSession.NumWins = c.FormValue("NumWins")
     game.State = "displaying_choice"
     if userChoice == "h" {
-      game.UserChoiceHigherClass = "choice-higher"
+      game.UserChoiceHigherClass = "user-choice-higher"
       game.UserChoiceLowerClass = ""
     } else if userChoice == "l" {
-      game.UserChoiceLowerClass = "choice-lower"
+      game.UserChoiceLowerClass = "user-choice-lower"
       game.UserChoiceHigherClass = ""
     }
     return c.String(http.StatusOK, "OK")

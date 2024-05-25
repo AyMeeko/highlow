@@ -128,10 +128,10 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
           if playerSession.HiScore < game.Score {
             playerSession.HiScore = game.Score
           }
-          triggerGameUpdate(playerSession, displayName, activeCard, message, "won", nextCard)
+          triggerGameUpdate(playerSession, displayName, activeCard, message, "won", nextCard, game.Score)
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
-          triggerGameUpdate(playerSession, displayName, activeCard, message, "correct", nextCard)
+          triggerGameUpdate(playerSession, displayName, activeCard, message, "correct", nextCard, game.Score)
           game.Timeout = createGameTimeoutCountdown(displayName)
         }
       } else {
@@ -141,7 +141,7 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
         if playerSession.HiScore < game.Score {
           playerSession.HiScore = game.Score
         }
-        triggerGameUpdate(playerSession, displayName, activeCard, message, "lost", nextCard)
+        triggerGameUpdate(playerSession, displayName, activeCard, message, "lost", nextCard, game.Score)
       }
     }
   }
@@ -164,7 +164,7 @@ func triggerNewGame(playerSession *PlayerSession, displayName string, activeCard
   sendPost(body, targetUrl)
 }
 
-func triggerGameUpdate(playerSession *PlayerSession, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
+func triggerGameUpdate(playerSession *PlayerSession, displayName string, activeCard int, userChoice string, verdict string, nextCard int, score int) {
   targetUrl := fmt.Sprintf("%s/game", baseUrl)
   body := fmt.Sprintf(
     "DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d&HiScore=%d&NumGames=%d&NumWins=%d&Score=%d",
@@ -176,7 +176,7 @@ func triggerGameUpdate(playerSession *PlayerSession, displayName string, activeC
     playerSession.HiScore,
     playerSession.NumGames,
     playerSession.NumWins,
-    playerSession.ActiveGame.Score,
+    score,
   )
   sendPost(body, targetUrl)
 }

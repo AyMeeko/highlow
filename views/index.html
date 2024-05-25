@@ -44,7 +44,7 @@
 {{ end }}
 
 {{ block "playerSession" . }}
-<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 1s" hx-swap="outerHTML" class="game-container">
+<div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every {{ .RefreshRate }}s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
   <div class="center">
     <span class="session-stats">Score: {{ .ActiveGame.Score }}</span>
@@ -54,9 +54,9 @@
   </div>
   <div class="active-card center">{{ .ActiveGame.ActiveCard }}</div>
   <div class="center">
-    <button class="{{ .ActiveGame.UserChoiceLowerClass }}">Lower</button>
+    <button class="{{ .ActiveGame.UserChoiceLowerClass }} {{ .ActiveGame.CorrectChoiceLowerClass }}">Lower</button>
     or
-    <button class="{{ .ActiveGame.UserChoiceHigherClass }}">Higher</button>
+    <button class="{{ .ActiveGame.UserChoiceHigherClass }} {{ .ActiveGame.CorrectChoiceHigherClass }}">Higher</button>
   </div>
   <div class="center notification-text {{ .ActiveGame.HideNotificationTextClass }}">
     {{ .ActiveGame.NotificationText }}

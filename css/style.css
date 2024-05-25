@@ -88,8 +88,12 @@ html{
     padding: 10px 0px;
   }
 
-  .choice-higher, .choice-lower {
+  .user-choice-higher, .user-choice-lower {
     background: slateblue;
+  }
+
+  .correct-choice-higher, .correct-choice-lower {
+    background: lightgreen;
   }
 }
 
