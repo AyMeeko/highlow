@@ -216,7 +216,7 @@ func main() {
 
   // HighLow game routes
   e.POST("/new-game", func(c echo.Context) error {
-    displayName := c.QueryParam("DisplayName")
+    displayName := c.FormValue("DisplayName")
     playerSession, ok := session.Read(displayName)
 
     if !ok {
@@ -226,24 +226,24 @@ func main() {
     if playerSession.ActiveGame != nil {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
-    playerSession.ActiveGame = initializeGame(displayName, c.QueryParam("ActiveCard"))
+    playerSession.ActiveGame = initializeGame(displayName, c.FormValue("ActiveCard"))
 
     return c.String(http.StatusOK, "OK")
   })
 
   e.POST("/game", func(c echo.Context) error {
-    displayName := c.QueryParam("DisplayName")
+    displayName := c.FormValue("DisplayName")
     playerSession, ok := session.Read(displayName)
 
     if !ok || (ok && playerSession.ActiveGame == nil) {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     game := playerSession.ActiveGame
-    game.ActiveCard = c.QueryParam("ActiveCard")
-    game.NextCard = c.QueryParam("NextCard")
+    game.ActiveCard = c.FormValue("ActiveCard")
+    game.NextCard = c.FormValue("NextCard")
     game.State = "displaying_choice"
-    game.Verdict = c.QueryParam("Verdict")
-    userChoice := c.QueryParam("UserChoice")
+    game.Verdict = c.FormValue("Verdict")
+    userChoice := c.FormValue("UserChoice")
     if userChoice == "h" {
       game.UserChoiceHigherClass = "choice-higher"
       game.UserChoiceLowerClass = ""
@@ -255,14 +255,14 @@ func main() {
   })
 
   e.POST("/update-notification", func(c echo.Context) error {
-    displayName := c.QueryParam("DisplayName")
+    displayName := c.FormValue("DisplayName")
     playerSession, ok := session.Read(displayName)
 
     if !ok || (ok && playerSession.ActiveGame == nil) {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     game := playerSession.ActiveGame
-    game.NotificationText = c.QueryParam("NotificationText")
+    game.NotificationText = c.FormValue("NotificationText")
     if game.NotificationText == "" {
       game.HideNotificationTextClass = "hide-notification"
     } else {
@@ -272,7 +272,7 @@ func main() {
   })
 
   e.POST("/expire-game", func(c echo.Context) error {
-    displayName := c.QueryParam("DisplayName")
+    displayName := c.FormValue("DisplayName")
     playerSession, ok := session.Read(displayName)
 
     if !ok || (ok && playerSession.ActiveGame == nil) {

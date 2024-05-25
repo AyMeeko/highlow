@@ -19,6 +19,9 @@ import (
 const baseUrl = "http://localhost:42069"
 const enableLogging = false
 const gameExpirationTime = 5 * time.Minute
+const rateLimitDuration = 3 * time.Second
+var restClient = resty.New()
+
 
 type PlayerSession struct {
   ActiveGame *Game
@@ -43,16 +46,16 @@ type Deck struct {
   Pointer int
 }
 
-func createLimiterCountdown(restClient *resty.Client, displayName string) *time.Timer {
+func createLimiterCountdown(displayName string) *time.Timer {
   duration := 5 * time.Second
   return time.AfterFunc(duration, func() {
-    triggerNotificationUpdate(restClient, displayName, "")
+    triggerNotificationUpdate(displayName, "")
   })
 }
 
-func createGameTimeoutCountdown(restClient *resty.Client, displayName string) *time.Timer {
+func createGameTimeoutCountdown(displayName string) *time.Timer {
   return time.AfterFunc(gameExpirationTime, func() {
-    triggerGameExpiration(restClient, displayName)
+    triggerGameExpiration(displayName)
   })
 }
 
@@ -87,11 +90,11 @@ func createGame(displayName string) *Game {
   }
 }
 
-func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession, displayName, message string) {
+func handleMessage(session *map[string]*PlayerSession, displayName, message string) {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
     targetUrl := fmt.Sprintf("http://localhost:42069/shut-down")
-    restClient.R().EnableTrace().Post(targetUrl)
+    restClient.R().Post(targetUrl)
     os.Exit(0)
   }
 
@@ -103,10 +106,10 @@ func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession,
     if playerSession.ActiveGame == nil {
       game := createGame(displayName)
       playerSession.ActiveGame = game
-      game.Timeout = createGameTimeoutCountdown(restClient, displayName)
+      game.Timeout = createGameTimeoutCountdown(displayName)
       (*session)[displayName] = playerSession
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.Deck.Cards[game.Deck.Pointer])
-      triggerNewGame(restClient, displayName, game.Deck.Cards[game.Deck.Pointer])
+      triggerNewGame(displayName, game.Deck.Cards[game.Deck.Pointer])
     }
   } else if message == "h" || message == "l" {
     game := playerSession.ActiveGame
@@ -126,11 +129,12 @@ func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession,
           if playerSession.HiScore < game.Score {
             playerSession.HiScore = game.Score
           }
-          triggerGameUpdate(restClient, displayName, activeCard, message, "won", nextCard)
+          triggerGameUpdate(displayName, activeCard, message, "won", nextCard)
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
-          triggerGameUpdate(restClient, displayName, activeCard, message, "correct", nextCard)
-          game.Timeout = createGameTimeoutCountdown(restClient, displayName)
+          playerSession.ActiveGame.Streak += 1
+          triggerGameUpdate(displayName, activeCard, message, "correct", nextCard)
+          game.Timeout = createGameTimeoutCountdown(displayName)
         }
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
@@ -139,52 +143,53 @@ func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession,
         if playerSession.HiScore < game.Score {
           playerSession.HiScore = game.Score
         }
-        triggerGameUpdate(restClient, displayName, activeCard, message, "lost", nextCard)
+        triggerGameUpdate(displayName, activeCard, message, "lost", nextCard)
       }
     }
   }
 }
 
-func triggerNewGame(restClient *resty.Client, displayName string, activeCard int) {
-  targetUrl := fmt.Sprintf(
-    "%s/new-game?DisplayName=%s&ActiveCard=%d",
-    baseUrl,
+func sendPost(body, targetUrl string) {
+  restClient.R().SetHeader("Content-Type", "application/x-www-form-urlencoded").SetBody(body).Post(targetUrl)
+}
+
+func triggerNewGame(displayName string, activeCard int) {
+  targetUrl := fmt.Sprintf("%s/new-game", baseUrl)
+  body := fmt.Sprintf(
+    "DisplayName=%s&ActiveCard=%d",
     displayName,
     activeCard,
   )
-  restClient.R().EnableTrace().Post(targetUrl)
+  sendPost(body, targetUrl)
 }
 
-func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
-  targetUrl := fmt.Sprintf(
-    "%s/game?DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
-    baseUrl,
+func triggerGameUpdate(displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
+  targetUrl := fmt.Sprintf("%s/game", baseUrl)
+  body := fmt.Sprintf(
+    "DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
     displayName,
     activeCard,
     userChoice,
     verdict,
     nextCard,
   )
-  restClient.R().EnableTrace().Post(targetUrl)
+  sendPost(body, targetUrl)
 }
 
-func triggerNotificationUpdate(restClient *resty.Client, displayName string, text string) {
-  targetUrl := fmt.Sprintf(
-    "%s/update-notification?DisplayName=%s&NotificationText=%s",
-    baseUrl,
+func triggerNotificationUpdate(displayName string, text string) {
+  targetUrl := fmt.Sprintf("%s/update-notification", baseUrl)
+  body := fmt.Sprintf(
+    "DisplayName=%s&NotificationText=%s",
     displayName,
     url.QueryEscape(text),
   )
-  restClient.R().EnableTrace().Post(targetUrl)
+  sendPost(body, targetUrl)
 }
 
-func triggerGameExpiration(restClient *resty.Client, displayName string) {
-  targetUrl := fmt.Sprintf(
-    "%s/expire-game?DisplayName=%s",
-    baseUrl,
-    displayName,
-  )
-  restClient.R().EnableTrace().Post(targetUrl)
+func triggerGameExpiration(displayName string) {
+  targetUrl := fmt.Sprintf("%s/expire-game", baseUrl)
+  body := fmt.Sprintf("DisplayName=%s", displayName)
+  sendPost(body, targetUrl)
 }
 
 func log(text string) {
@@ -194,7 +199,6 @@ func log(text string) {
 }
 
 func main() {
-  restClient := resty.New()
   session := make(map[string]*PlayerSession)
 
   client := twitch.NewAnonymousClient()
@@ -213,18 +217,17 @@ func main() {
       log(fmt.Sprintf("Before, RateLimited: %t", playerSession.RateLimited))
       if playerSession.RateLimited {
         triggerNotificationUpdate(
-          restClient,
           displayName,
           "Fastest fingers in the west! Slow down with your messages.",
         )
-        playerSession.LimiterCountdown = createLimiterCountdown(restClient, displayName)
+        playerSession.LimiterCountdown = createLimiterCountdown(displayName)
         log(fmt.Sprintf("RateLimited: %s", displayName))
       } else {
         playerSession.Lock.Lock()
         log("Locking")
         playerSession.RateLimited = true
-        handleMessage(restClient, &session, displayName, message)
-        time.Sleep(3 * time.Second)
+        handleMessage(&session, displayName, message)
+        time.Sleep(rateLimitDuration)
         playerSession.RateLimited = false
         log(fmt.Sprintf("Inside, RateLimited: %t", playerSession.RateLimited))
         log("Unlocking")
