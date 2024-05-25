@@ -10,14 +10,16 @@
   </head>
   <body>
     <p id="game-name" class="center">High/Low Game</p>
-    <div id="instructions" class="center">Try to guess if the next card will be higher or lower. (Numbers range 1-13 inclusive.)</div>
-    <div id="commands" class="">
-      Chat commands:
-      <ul>
-        <li>Send "!j" in chat to join.</li>
-        <li>Send "h" in chat to guess "higher"</li>
-        <li>Send "l" in chat to guess "lower"</li>
-      </ul>
+    <div id="instructions">
+      <div class="center">Try to guess if the next card will be higher or lower. (Numbers range 1-13 inclusive.)</div>
+      <div id="commands" class="">
+        Chat commands:
+        <ul>
+          <li>Send "!j" in chat to join.</li>
+          <li>Send "h" in chat to guess "higher"</li>
+          <li>Send "l" in chat to guess "lower"</li>
+        </ul>
+      </div>
     </div>
     {{ template "session" . }}
   </body>
@@ -41,17 +43,23 @@
 </div>
 {{ end }}
 
-{{ block "game" . }}
+{{ block "playerSession" . }}
 <div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 1s" hx-swap="outerHTML" class="game-container">
   <div class="display-name center">{{ .DisplayName }}</div>
-  <div class="active-card center">{{ .ActiveCard }}</div>
   <div class="center">
-    <button class="{{ .UserChoiceLowerClass }}">Lower</button>
-    or
-    <button class="{{ .UserChoiceHigherClass }}">Higher</button>
+    <span class="session-stats">Score: {{ .ActiveGame.Score }}</span>
+    <span class="session-stats">HiScore: {{ .HiScore }}</span>
+    <span class="session-stats">Played: {{ .NumGames }}</span>
+    <span class="session-stats">Wins: {{ .NumWins }}</span>
   </div>
-  <div class="center notification-text {{ .HideNotificationTextClass }}">
-    {{ .NotificationText }}
+  <div class="active-card center">{{ .ActiveGame.ActiveCard }}</div>
+  <div class="center">
+    <button class="{{ .ActiveGame.UserChoiceLowerClass }}">Lower</button>
+    or
+    <button class="{{ .ActiveGame.UserChoiceHigherClass }}">Higher</button>
+  </div>
+  <div class="center notification-text {{ .ActiveGame.HideNotificationTextClass }}">
+    {{ .ActiveGame.NotificationText }}
   </div>
 </div>
 {{ end }}

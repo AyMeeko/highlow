@@ -14,6 +14,10 @@
   text-align: center;
 }
 
+.session-stats {
+  padding: 0px 8px;
+}
+
 #game-name {
   font-size: 40px;
   padding: 10px;
@@ -76,6 +80,7 @@ html{
 
   .display-name {
     font-size: 40px;
+    padding: 0px 0px 5px 0px;
   }
 
   .active-card {

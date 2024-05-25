@@ -47,14 +47,14 @@ func (s *Session) Write(displayName string, playerSession *PlayerSession) {
   s.lock.Unlock()
 }
 
-func (s *Session) FindUnrendered() *Game {
+func (s *Session) FindUnrenderedAndRender() *PlayerSession {
   s.lock.Lock()
   defer s.lock.Unlock()
   for _, playerSession := range s.Mapping {
     game := playerSession.ActiveGame
     if game != nil && !game.Rendered {
       game.Rendered = true
-      return game
+      return playerSession
     }
   }
   return nil
@@ -63,15 +63,16 @@ func (s *Session) FindUnrendered() *Game {
 type PlayerSession struct {
   DisplayName string
   ActiveGame *Game
-  HiScore int
-  NumGames int
-  NumWins int
+  HiScore string
+  NumGames string
+  NumWins string
 }
 
 type Game struct {
   DisplayName string
   ActiveCard string
   NextCard string
+  Score string
   Verdict string
   State string
   UserChoiceLowerClass string
@@ -81,9 +82,7 @@ type Game struct {
   Rendered bool
 }
 
-type Placeholder struct {
-  visible bool
-}
+type Placeholder struct {}
 
 type Result struct {
   DisplayName string
@@ -95,9 +94,9 @@ type Result struct {
 func initializePlayerSession(displayName string) *PlayerSession {
   return &PlayerSession {
     DisplayName: displayName,
-    HiScore: 0,
-    NumGames: 0,
-    NumWins: 0,
+    HiScore: "0",
+    NumGames: "0",
+    NumWins: "0",
   }
 }
 
@@ -105,6 +104,7 @@ func initializeGame(displayName string, activeCard string) *Game {
   return &Game {
     DisplayName: displayName,
     ActiveCard: activeCard,
+    Score: "0",
     State: "in_progress",
     Rendered: false,
     HideNotificationTextClass: "hide-notification",
@@ -112,12 +112,14 @@ func initializeGame(displayName string, activeCard string) *Game {
 }
 
 func main() {
-  placeholder := Placeholder {
-    visible: true,
-  }
+  placeholder := Placeholder {}
   session := Session {
     Mapping: make(map[string]*PlayerSession),
   }
+  //displayName := "AyMeeko"
+  //playerSession := initializePlayerSession(displayName)
+  //playerSession.ActiveGame = initializeGame(displayName, "4")
+  //session.Write(displayName, playerSession)
 
   e := echo.New()
   e.Use(middleware.Logger())
@@ -141,12 +143,12 @@ func main() {
     game := playerSession.ActiveGame
     switch game.State {
     case "not_started":
-      return c.Render(200, "game", game)
+      return c.Render(200, "playerSession", playerSession)
     case "in_progress":
-      return c.Render(200, "game", game)
+      return c.Render(200, "playerSession", playerSession)
     case "displaying_choice":
       game.State = "displaying_result"
-      return c.Render(200, "game", game)
+      return c.Render(200, "playerSession", playerSession)
     case "displaying_result":
       game.UserChoiceLowerClass = ""
       game.UserChoiceHigherClass = ""
@@ -207,9 +209,9 @@ func main() {
   })
 
   e.GET("/check-for-new-game", func(c echo.Context) error {
-    game := session.FindUnrendered()
-    if game != nil {
-      return c.Render(200, "game", game)
+    playerSession := session.FindUnrenderedAndRender()
+    if playerSession != nil && playerSession.ActiveGame != nil {
+      return c.Render(200, "playerSession", playerSession)
     }
     return c.Render(200, "placeholder", placeholder)
   })
@@ -227,6 +229,9 @@ func main() {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
     playerSession.ActiveGame = initializeGame(displayName, c.FormValue("ActiveCard"))
+    playerSession.HiScore = c.FormValue("HiScore")
+    playerSession.NumGames = c.FormValue("NumGames")
+    playerSession.NumWins = c.FormValue("NumWins")
 
     return c.String(http.StatusOK, "OK")
   })
@@ -241,9 +246,13 @@ func main() {
     game := playerSession.ActiveGame
     game.ActiveCard = c.FormValue("ActiveCard")
     game.NextCard = c.FormValue("NextCard")
-    game.State = "displaying_choice"
     game.Verdict = c.FormValue("Verdict")
+    game.Score = c.FormValue("Score")
     userChoice := c.FormValue("UserChoice")
+    playerSession.HiScore = c.FormValue("HiScore")
+    playerSession.NumGames = c.FormValue("NumGames")
+    playerSession.NumWins = c.FormValue("NumWins")
+    game.State = "displaying_choice"
     if userChoice == "h" {
       game.UserChoiceHigherClass = "choice-higher"
       game.UserChoiceLowerClass = ""

@@ -35,7 +35,6 @@ type PlayerSession struct {
 
 type Game struct {
   Deck *Deck
-  Streak int
   DisplayName string
   Score int
   Timeout *time.Timer
@@ -109,7 +108,7 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
       game.Timeout = createGameTimeoutCountdown(displayName)
       (*session)[displayName] = playerSession
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.Deck.Cards[game.Deck.Pointer])
-      triggerNewGame(displayName, game.Deck.Cards[game.Deck.Pointer])
+      triggerNewGame(playerSession, displayName, game.Deck.Cards[game.Deck.Pointer])
     }
   } else if message == "h" || message == "l" {
     game := playerSession.ActiveGame
@@ -129,11 +128,10 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
           if playerSession.HiScore < game.Score {
             playerSession.HiScore = game.Score
           }
-          triggerGameUpdate(displayName, activeCard, message, "won", nextCard)
+          triggerGameUpdate(playerSession, displayName, activeCard, message, "won", nextCard)
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
-          playerSession.ActiveGame.Streak += 1
-          triggerGameUpdate(displayName, activeCard, message, "correct", nextCard)
+          triggerGameUpdate(playerSession, displayName, activeCard, message, "correct", nextCard)
           game.Timeout = createGameTimeoutCountdown(displayName)
         }
       } else {
@@ -143,7 +141,7 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
         if playerSession.HiScore < game.Score {
           playerSession.HiScore = game.Score
         }
-        triggerGameUpdate(displayName, activeCard, message, "lost", nextCard)
+        triggerGameUpdate(playerSession, displayName, activeCard, message, "lost", nextCard)
       }
     }
   }
@@ -153,25 +151,32 @@ func sendPost(body, targetUrl string) {
   restClient.R().SetHeader("Content-Type", "application/x-www-form-urlencoded").SetBody(body).Post(targetUrl)
 }
 
-func triggerNewGame(displayName string, activeCard int) {
+func triggerNewGame(playerSession *PlayerSession, displayName string, activeCard int) {
   targetUrl := fmt.Sprintf("%s/new-game", baseUrl)
   body := fmt.Sprintf(
-    "DisplayName=%s&ActiveCard=%d",
+    "DisplayName=%s&ActiveCard=%d&HiScore=%d&NumGames=%d&NumWins=%d",
     displayName,
     activeCard,
+    playerSession.HiScore,
+    playerSession.NumGames,
+    playerSession.NumWins,
   )
   sendPost(body, targetUrl)
 }
 
-func triggerGameUpdate(displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
+func triggerGameUpdate(playerSession *PlayerSession, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
   targetUrl := fmt.Sprintf("%s/game", baseUrl)
   body := fmt.Sprintf(
-    "DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
+    "DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d&HiScore=%d&NumGames=%d&NumWins=%d&Score=%d",
     displayName,
     activeCard,
     userChoice,
     verdict,
     nextCard,
+    playerSession.HiScore,
+    playerSession.NumGames,
+    playerSession.NumWins,
+    playerSession.ActiveGame.Score,
   )
   sendPost(body, targetUrl)
 }
