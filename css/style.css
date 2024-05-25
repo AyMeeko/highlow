@@ -1,14 +1,5 @@
 .placeholder {
-  /*display: none;*/
   padding: 25px 0px;
-}
-
-.hide-placeholder {
-  display: none;
-}
-
-.hide-game {
-  display: none;
 }
 
 .notification-text {

@@ -9,11 +9,16 @@ import (
   "net/url"
   "os"
   "strings"
+  "sync"
   "time"
 
   "github.com/gempir/go-twitch-irc/v4"
   "github.com/go-resty/resty/v2"
 )
+
+const baseUrl = "http://localhost:42069"
+const enableLogging = false
+const gameExpirationTime = 5 * time.Minute
 
 type PlayerSession struct {
   ActiveGame *Game
@@ -21,6 +26,8 @@ type PlayerSession struct {
   NumGames int
   NumWins int
   RateLimited bool
+  LimiterCountdown *time.Timer
+  Lock sync.RWMutex
 }
 
 type Game struct {
@@ -28,6 +35,7 @@ type Game struct {
   Streak int
   DisplayName string
   Score int
+  Timeout *time.Timer
 }
 
 type Deck struct {
@@ -35,9 +43,17 @@ type Deck struct {
   Pointer int
 }
 
-type ChannelMessage struct {
-  DisplayName string
-  RateLimited bool
+func createLimiterCountdown(restClient *resty.Client, displayName string) *time.Timer {
+  duration := 5 * time.Second
+  return time.AfterFunc(duration, func() {
+    triggerNotificationUpdate(restClient, displayName, "")
+  })
+}
+
+func createGameTimeoutCountdown(restClient *resty.Client, displayName string) *time.Timer {
+  return time.AfterFunc(gameExpirationTime, func() {
+    triggerGameExpiration(restClient, displayName)
+  })
 }
 
 func createAndShuffleDeck() []int {
@@ -74,25 +90,28 @@ func createGame(displayName string) *Game {
 func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession, displayName, message string) {
   if message == "!shutdown" && displayName == "AyMeeko" {
     fmt.Println("Shutting down server...")
+    targetUrl := fmt.Sprintf("http://localhost:42069/shut-down")
+    restClient.R().EnableTrace().Post(targetUrl)
     os.Exit(0)
   }
 
+  playerSession := (*session)[displayName]
   if message == "!j" {
     if len(*session) == 4 {
       fmt.Println("Sorry, reached max number of players.")
     }
-    playerSession := (*session)[displayName]
     if playerSession.ActiveGame == nil {
       game := createGame(displayName)
       playerSession.ActiveGame = game
+      game.Timeout = createGameTimeoutCountdown(restClient, displayName)
       (*session)[displayName] = playerSession
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.Deck.Cards[game.Deck.Pointer])
       triggerNewGame(restClient, displayName, game.Deck.Cards[game.Deck.Pointer])
     }
   } else if message == "h" || message == "l" {
-    playerSession, ok := (*session)[displayName]
     game := playerSession.ActiveGame
-    if ok && game != nil {
+    if game != nil {
+      game.Timeout.Stop()
       activeCard := game.Deck.Cards[game.Deck.Pointer]
       nextCard := game.Deck.Cards[game.Deck.Pointer + 1]
       result := (message == "h" && nextCard > activeCard) || (message == "l" && nextCard < activeCard)
@@ -111,6 +130,7 @@ func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession,
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
           triggerGameUpdate(restClient, displayName, activeCard, message, "correct", nextCard)
+          game.Timeout = createGameTimeoutCountdown(restClient, displayName)
         }
       } else {
         fmt.Printf("Incorrect! The next card was %d. Better luck next time!\n", nextCard)
@@ -127,7 +147,8 @@ func handleMessage(restClient *resty.Client, session *map[string]*PlayerSession,
 
 func triggerNewGame(restClient *resty.Client, displayName string, activeCard int) {
   targetUrl := fmt.Sprintf(
-    "http://localhost:42069/new-game?DisplayName=%s&ActiveCard=%d",
+    "%s/new-game?DisplayName=%s&ActiveCard=%d",
+    baseUrl,
     displayName,
     activeCard,
   )
@@ -136,7 +157,8 @@ func triggerNewGame(restClient *resty.Client, displayName string, activeCard int
 
 func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard int, userChoice string, verdict string, nextCard int) {
   targetUrl := fmt.Sprintf(
-    "http://localhost:42069/game?DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
+    "%s/game?DisplayName=%s&ActiveCard=%d&UserChoice=%s&Verdict=%s&NextCard=%d",
+    baseUrl,
     displayName,
     activeCard,
     userChoice,
@@ -148,18 +170,32 @@ func triggerGameUpdate(restClient *resty.Client, displayName string, activeCard 
 
 func triggerNotificationUpdate(restClient *resty.Client, displayName string, text string) {
   targetUrl := fmt.Sprintf(
-    "http://localhost:42069/update-notification?DisplayName=%s&NotificationText=%s",
+    "%s/update-notification?DisplayName=%s&NotificationText=%s",
+    baseUrl,
     displayName,
     url.QueryEscape(text),
   )
   restClient.R().EnableTrace().Post(targetUrl)
 }
 
+func triggerGameExpiration(restClient *resty.Client, displayName string) {
+  targetUrl := fmt.Sprintf(
+    "%s/expire-game?DisplayName=%s",
+    baseUrl,
+    displayName,
+  )
+  restClient.R().EnableTrace().Post(targetUrl)
+}
+
+func log(text string) {
+  if enableLogging {
+    fmt.Printf("[DEBUG] %s %s\n", time.Now().Format("2006-01-02T15:04:05"), text)
+  }
+}
+
 func main() {
   restClient := resty.New()
   session := make(map[string]*PlayerSession)
-  channel := make(chan ChannelMessage)
-  rateLimit := make(map[string]bool)
 
   client := twitch.NewAnonymousClient()
 
@@ -174,40 +210,28 @@ func main() {
     }
 
     go func() {
-      if rateLimit[displayName] {
+      log(fmt.Sprintf("Before, RateLimited: %t", playerSession.RateLimited))
+      if playerSession.RateLimited {
         triggerNotificationUpdate(
           restClient,
           displayName,
           "Fastest fingers in the west! Slow down with your messages.",
         )
-        playerSession.RateLimited = true
-        fmt.Printf("Rate limited %s\n", displayName)
+        playerSession.LimiterCountdown = createLimiterCountdown(restClient, displayName)
+        log(fmt.Sprintf("RateLimited: %s", displayName))
       } else {
-        channel <- ChannelMessage {
-          DisplayName: displayName,
-          RateLimited: true,
-        }
+        playerSession.Lock.Lock()
+        log("Locking")
+        playerSession.RateLimited = true
         handleMessage(restClient, &session, displayName, message)
-        time.Sleep(2*time.Second)
-        if playerSession.RateLimited {
-          //time.Sleep(2*time.Second)
-          playerSession.RateLimited = false
-          triggerNotificationUpdate(restClient, displayName, "")
-        }
-        channel <- ChannelMessage {
-          DisplayName: displayName,
-          RateLimited: false,
-        }
+        time.Sleep(3 * time.Second)
+        playerSession.RateLimited = false
+        log(fmt.Sprintf("Inside, RateLimited: %t", playerSession.RateLimited))
+        log("Unlocking")
+        playerSession.Lock.Unlock()
       }
     }()
   })
-
-  go func() {
-    for {
-      msg := <-channel
-      rateLimit[msg.DisplayName] = msg.RateLimited
-    }
-  }()
 
   client.Join("AyMeeko")
 

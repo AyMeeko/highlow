@@ -43,17 +43,15 @@
 
 {{ block "game" . }}
 <div hx-get="/game?DisplayName={{ .DisplayName }}" hx-trigger="every 1s" hx-swap="outerHTML" class="game-container">
-  <div class="{{ .GameClass }}">
-    <div class="display-name center">{{ .DisplayName }}</div>
-    <div class="active-card center">{{ .ActiveCard }}</div>
-    <div class="center">
-      <button class="{{ .UserChoiceLowerClass }}">Lower</button>
-      or
-      <button class="{{ .UserChoiceHigherClass }}">Higher</button>
-    </div>
-    <div class="center notification-text {{ .HideNotificationTextClass }}">
-      {{ .NotificationText }}
-    </div>
+  <div class="display-name center">{{ .DisplayName }}</div>
+  <div class="active-card center">{{ .ActiveCard }}</div>
+  <div class="center">
+    <button class="{{ .UserChoiceLowerClass }}">Lower</button>
+    or
+    <button class="{{ .UserChoiceHigherClass }}">Higher</button>
+  </div>
+  <div class="center notification-text {{ .HideNotificationTextClass }}">
+    {{ .NotificationText }}
   </div>
 </div>
 {{ end }}

@@ -1,12 +1,16 @@
 package main
 
 import (
-  "fmt"
+  "context"
   "html/template"
   "io"
   "net/http"
+  "os"
+  "os/signal"
+  "sync"
+  "syscall"
+  "time"
 
-  "github.com/google/uuid"
   "github.com/labstack/echo/v4"
   "github.com/labstack/echo/v4/middleware"
 )
@@ -25,6 +29,37 @@ func newTemplate() *Templates {
   }
 }
 
+type Session struct {
+  Mapping map[string]*PlayerSession
+  lock sync.RWMutex
+}
+
+func (s *Session) Read(displayName string) (*PlayerSession, bool) {
+  s.lock.RLock()
+  found, ok := s.Mapping[displayName]
+  s.lock.RUnlock()
+  return found, ok
+}
+
+func (s *Session) Write(displayName string, playerSession *PlayerSession) {
+  s.lock.Lock()
+  s.Mapping[displayName] = playerSession
+  s.lock.Unlock()
+}
+
+func (s *Session) FindUnrendered() *Game {
+  s.lock.Lock()
+  defer s.lock.Unlock()
+  for _, playerSession := range s.Mapping {
+    game := playerSession.ActiveGame
+    if game != nil && !game.Rendered {
+      game.Rendered = true
+      return game
+    }
+  }
+  return nil
+}
+
 type PlayerSession struct {
   DisplayName string
   ActiveGame *Game
@@ -39,11 +74,8 @@ type Game struct {
   NextCard string
   Verdict string
   State string
-  Dirty bool
   UserChoiceLowerClass string
   UserChoiceHigherClass string
-  PlaceholderClass string
-  GameClass string
   HideNotificationTextClass string
   NotificationText string
   Rendered bool
@@ -79,27 +111,13 @@ func initializeGame(displayName string, activeCard string) *Game {
   }
 }
 
-func findEmptyGame(games map[string]Game) Game {
-  var foundGame string
-  for key, val := range games {
-    if val.PlaceholderClass == "" {
-      foundGame = key
-      break
-    }
-  }
-  return games[foundGame]
-}
-
-func isUUID(u string) bool {
-  _, err := uuid.Parse(u)
-  return err == nil
-}
-
 func main() {
   placeholder := Placeholder {
     visible: true,
   }
-  session := make(map[string]*PlayerSession)
+  session := Session {
+    Mapping: make(map[string]*PlayerSession),
+  }
 
   e := echo.New()
   e.Use(middleware.Logger())
@@ -109,17 +127,18 @@ func main() {
   // Browser routes
   e.Static("/css", "css")
   e.GET("/", func(c echo.Context) error {
-    return c.Render(200, "index", session)
+    return c.Render(200, "index", session.Mapping)
   })
 
   e.GET("/game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    playerSession, ok := session[displayName]
-    game := playerSession.ActiveGame
+    playerSession, ok := session.Read(displayName)
 
-    if !ok || game == nil {
+    if !ok || playerSession.ActiveGame == nil {
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
+
+    game := playerSession.ActiveGame
     switch game.State {
     case "not_started":
       return c.Render(200, "game", game)
@@ -165,6 +184,12 @@ func main() {
         HideNotificationTextClass: game.HideNotificationTextClass,
       }
       return c.Render(200, "endGame", result)
+    case "expired":
+      result := Result {
+        DisplayName: displayName,
+        Text: "Game expired.",
+      }
+      return c.Render(200, "endGame", result)
     default:
       return c.String(http.StatusInternalServerError, "InternalServerError")
     }
@@ -172,7 +197,7 @@ func main() {
 
   e.POST("/install-placeholder", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    playerSession, ok := session[displayName]
+    playerSession, ok := session.Read(displayName)
 
     if !ok {
       return c.String(http.StatusInternalServerError, "InternalServerError")
@@ -182,12 +207,9 @@ func main() {
   })
 
   e.GET("/check-for-new-game", func(c echo.Context) error {
-    for _, playerSession := range session {
-      game := playerSession.ActiveGame
-      if game != nil {
-        game.Rendered = true
-        return c.Render(200, "game", game)
-      }
+    game := session.FindUnrendered()
+    if game != nil {
+      return c.Render(200, "game", game)
     }
     return c.Render(200, "placeholder", placeholder)
   })
@@ -195,11 +217,11 @@ func main() {
   // HighLow game routes
   e.POST("/new-game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    playerSession, ok := session[displayName]
+    playerSession, ok := session.Read(displayName)
 
     if !ok {
       playerSession = initializePlayerSession(displayName)
-      session[displayName] = playerSession
+      session.Write(displayName, playerSession)
     }
     if playerSession.ActiveGame != nil {
       return c.String(http.StatusInternalServerError, "InternalServerError")
@@ -211,7 +233,7 @@ func main() {
 
   e.POST("/game", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    playerSession, ok := session[displayName]
+    playerSession, ok := session.Read(displayName)
 
     if !ok || (ok && playerSession.ActiveGame == nil) {
       return c.String(http.StatusInternalServerError, "InternalServerError")
@@ -234,7 +256,7 @@ func main() {
 
   e.POST("/update-notification", func(c echo.Context) error {
     displayName := c.QueryParam("DisplayName")
-    playerSession, ok := session[displayName]
+    playerSession, ok := session.Read(displayName)
 
     if !ok || (ok && playerSession.ActiveGame == nil) {
       return c.String(http.StatusInternalServerError, "InternalServerError")
@@ -249,5 +271,41 @@ func main() {
     return c.String(http.StatusOK, "OK")
   })
 
+  e.POST("/expire-game", func(c echo.Context) error {
+    displayName := c.QueryParam("DisplayName")
+    playerSession, ok := session.Read(displayName)
+
+    if !ok || (ok && playerSession.ActiveGame == nil) {
+      return c.String(http.StatusInternalServerError, "InternalServerError")
+    }
+    game := playerSession.ActiveGame
+    if game != nil {
+      game.State = "expired"
+    }
+    return c.String(http.StatusOK, "OK")
+  })
+
+  e.POST("/shut-down", func(c echo.Context) error {
+    syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+    return c.String(http.StatusOK, "OK")
+  })
+
   e.Logger.Fatal(e.Start(":42069"))
+
+  ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+  defer stop()
+  // Start server
+  go func() {
+    if err := e.Start(":42069"); err != nil && err != http.ErrServerClosed {
+      e.Logger.Fatal("shutting down the server")
+    }
+  }()
+
+  // Wait for interrupt signal to gracefully shutdown the server with a timeout of 10 seconds.
+  <-ctx.Done()
+  ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+  defer cancel()
+  if err := e.Shutdown(ctx); err != nil {
+    e.Logger.Fatal(err)
+  }
 }
