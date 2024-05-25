@@ -84,6 +84,7 @@ type Game struct {
   HideNotificationTextClass string
   NotificationText string
   Rendered bool
+  Timeout float32
 }
 
 type Placeholder struct {}
@@ -114,7 +115,14 @@ func initializeGame(displayName string, activeCard string) *Game {
     State: "in_progress",
     Rendered: false,
     HideNotificationTextClass: "hide-notification",
+    Timeout: 0,
   }
+}
+
+func updateTimeout(playerSession *PlayerSession) {
+  game := playerSession.ActiveGame
+  // 3 min game expiration
+  game.Timeout += 0.55
 }
 
 func main() {
@@ -151,12 +159,15 @@ func main() {
     case "not_started":
       return c.Render(200, "playerSession", playerSession)
     case "in_progress":
+      updateTimeout(playerSession)
       return c.Render(200, "playerSession", playerSession)
     case "displaying_choice":
+      updateTimeout(playerSession)
       game.State = "displaying_result"
       playerSession.RefreshRate = "2"
       return c.Render(200, "playerSession", playerSession)
     case "displaying_result":
+      updateTimeout(playerSession)
       switch game.Verdict {
       case "correct":
         game.State = "clear_result"
@@ -188,6 +199,7 @@ func main() {
       }
       return c.Render(200, "playerSession", playerSession)
     case "clear_result":
+      updateTimeout(playerSession)
       game.State = "in_progress"
       game.UserChoiceLowerClass = ""
       game.UserChoiceHigherClass = ""
@@ -197,6 +209,7 @@ func main() {
       playerSession.RefreshRate = "1"
       return c.Render(200, "playerSession", playerSession)
     case "won":
+      updateTimeout(playerSession)
       result := Result {
         DisplayName: displayName,
         Text: "You win!!",
@@ -205,6 +218,7 @@ func main() {
       }
       return c.Render(200, "endGame", result)
     case "lost":
+      updateTimeout(playerSession)
       result := Result {
         DisplayName: displayName,
         Text: "You lost!",
@@ -213,6 +227,7 @@ func main() {
       }
       return c.Render(200, "endGame", result)
     case "expired":
+      updateTimeout(playerSession)
       result := Result {
         DisplayName: displayName,
         Text: "Game expired.",
@@ -287,6 +302,7 @@ func main() {
       game.UserChoiceLowerClass = "user-choice-lower"
       game.UserChoiceHigherClass = ""
     }
+    game.Timeout = 0
     return c.String(http.StatusOK, "OK")
   })
 

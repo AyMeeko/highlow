@@ -18,7 +18,7 @@ import (
 
 const baseUrl = "http://localhost:42069"
 const enableLogging = false
-const gameExpirationTime = 5 * time.Minute
+const gameExpirationTime = 3 * time.Minute
 const rateLimitDuration = 3 * time.Second
 var restClient = resty.New()
 
@@ -94,7 +94,7 @@ func createGame(displayName string) *Game {
 }
 
 func handleMessage(session *map[string]*PlayerSession, displayName, message string) {
-  if message == "!shutdown" && displayName == "AyMeeko" {
+  if message == "!shutdown" && (displayName == "AyMeeko" || displayName == "PlayHighLow") {
     fmt.Println("Shutting down server...")
     targetUrl := fmt.Sprintf("http://localhost:42069/shut-down")
     restClient.R().Post(targetUrl)

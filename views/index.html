@@ -19,6 +19,7 @@
           <li>Send "h" in chat to guess "higher"</li>
           <li>Send "l" in chat to guess "lower"</li>
         </ul>
+        <div>Games will time out after 3 minutes of inactivity.</div>
       </div>
     </div>
     {{ template "session" . }}
@@ -61,6 +62,7 @@
   <div class="center notification-text {{ .ActiveGame.HideNotificationTextClass }}">
     {{ .ActiveGame.NotificationText }}
   </div>
+  <div style="width:{{ .ActiveGame.Timeout }}%; padding: 2px; background: darkgray;">&nbsp;</div>
 </div>
 {{ end }}
 
