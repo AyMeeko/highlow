@@ -18,7 +18,7 @@ import (
 
 const baseUrl = "http://localhost:42069"
 const enableLogging = false
-const gameExpirationTime = 1 * time.Minute
+const gameExpirationTime = 5 * time.Minute
 const rateLimitDuration = 3 * time.Second
 var restClient = resty.New()
 
