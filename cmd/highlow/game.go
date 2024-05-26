@@ -20,8 +20,15 @@ const baseUrl = "http://localhost:42069"
 const enableLogging = false
 const gameExpirationTime = 3 * time.Minute
 const rateLimitDuration = 3 * time.Second
+const maxConcurrentGames = 4
 var restClient = resty.New()
 
+
+type Session struct {
+  PlayerSessions map[string]*PlayerSession
+  ActiveGames int
+  Lock sync.RWMutex
+}
 
 type PlayerSession struct {
   ActiveGame *Game
@@ -93,24 +100,28 @@ func createGame(displayName string) *Game {
   }
 }
 
-func handleMessage(session *map[string]*PlayerSession, displayName, message string) {
-  if message == "!shutdown" && (displayName == "AyMeeko" || displayName == "PlayHighLow") {
+func handleMessage(session *Session, displayName, message string) {
+  if message == "!shutdown" && (displayName == "AyMeeko" || displayName == "playhighlow") {
     fmt.Println("Shutting down server...")
     targetUrl := fmt.Sprintf("http://localhost:42069/shut-down")
     restClient.R().Post(targetUrl)
     os.Exit(0)
   }
 
-  playerSession := (*session)[displayName]
+  playerSession := (*session).PlayerSessions[displayName]
   if message == "!j" {
-    if len(*session) == 4 {
+    session.Lock.Lock()
+    if session.ActiveGames >= maxConcurrentGames {
       fmt.Println("Sorry, reached max number of players.")
+    } else {
+      session.ActiveGames += 1
     }
+    session.Lock.Unlock()
     if playerSession.ActiveGame == nil {
       game := createGame(displayName)
       playerSession.ActiveGame = game
       game.Timeout = createGameTimeoutCountdown(playerSession)
-      (*session)[displayName] = playerSession
+      (*session).PlayerSessions[displayName] = playerSession
       fmt.Printf("Game started for %s. Active card: %d\n", displayName, game.Deck.Cards[game.Deck.Pointer])
       triggerNewGame(playerSession, displayName, game.Deck.Cards[game.Deck.Pointer])
     }
@@ -133,6 +144,9 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
             playerSession.HiScore = game.Score
           }
           triggerGameUpdate(playerSession, displayName, activeCard, message, "won", nextCard, game.Score)
+          session.Lock.Lock()
+          session.ActiveGames -= 1
+          session.Lock.Unlock()
         } else {
           fmt.Printf("Correct! Active card: %d\n", nextCard)
           triggerGameUpdate(playerSession, displayName, activeCard, message, "correct", nextCard, game.Score)
@@ -146,6 +160,9 @@ func handleMessage(session *map[string]*PlayerSession, displayName, message stri
           playerSession.HiScore = game.Score
         }
         triggerGameUpdate(playerSession, displayName, activeCard, message, "lost", nextCard, game.Score)
+        session.Lock.Lock()
+        session.ActiveGames -= 1
+        session.Lock.Unlock()
       }
     }
   }
@@ -208,7 +225,9 @@ func log(text string) {
 }
 
 func main() {
-  session := make(map[string]*PlayerSession)
+  session := Session {
+    PlayerSessions: make(map[string]*PlayerSession),
+  }
 
   client := twitch.NewAnonymousClient()
 
@@ -216,10 +235,10 @@ func main() {
     displayName := rawMessage.User.DisplayName
     message := strings.ToLower(rawMessage.Message)
 
-    playerSession, ok := session[displayName]
+    playerSession, ok := session.PlayerSessions[displayName]
     if !ok {
       playerSession = createPlayerSession()
-      session[displayName] = playerSession
+      session.PlayerSessions[displayName] = playerSession
     }
 
     go func() {
